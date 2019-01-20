@@ -43,9 +43,9 @@ class DataFeeder(threading.Thread):
     ]
 
     # Create queue for buffering data:
-    queue = tf.FIFOQueue(8, [tf.int32, tf.int32, tf.float32, tf.float32], name='input_queue')
+    queue = tf.FIFOQueue(8, [tf.int32, tf.int32, tf.float32, tf.float32, tf.string], name='input_queue')
     self._enqueue_op = queue.enqueue(self._placeholders)
-    self.inputs, self.input_lengths, self.mel_targets, self.linear_targets = queue.dequeue()
+    self.inputs, self.input_lengths, self.mel_targets, self.linear_targets,self.filenames = queue.dequeue()
     self.inputs.set_shape(self._placeholders[0].shape)
     self.input_lengths.set_shape(self._placeholders[1].shape)
     self.mel_targets.set_shape(self._placeholders[2].shape)
@@ -129,7 +129,8 @@ def _prepare_batch(batch, outputs_per_step):
   input_lengths = np.asarray([len(x[0]) for x in batch], dtype=np.int32)
   mel_targets = _prepare_targets([x[1] for x in batch], outputs_per_step)
   linear_targets = _prepare_targets([x[2] for x in batch], outputs_per_step)
-  return (inputs, input_lengths, mel_targets, linear_targets)
+  filenames = [x[-1] for x in batch]
+  return (inputs, input_lengths, mel_targets, linear_targets,filenames)
 
 
 def _prepare_inputs(inputs):

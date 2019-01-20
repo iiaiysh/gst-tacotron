@@ -12,10 +12,12 @@ import textwrap
 class Synthesizer:
   def __init__(self, teacher_forcing_generating=False):
     self.teacher_forcing_generating = teacher_forcing_generating
-  def load(self, checkpoint_path, reference_mel=None, model_name='tacotron'):
+
+  def load(self, checkpoint_path, reference_mel=None, model_name='tacotron',reuse=None):
     print('Constructing model: %s' % model_name)
     inputs = tf.placeholder(tf.int32, [1, None], 'inputs')
     input_lengths = tf.placeholder(tf.int32, [1], 'input_lengths') 
+    filenames = tf.placeholder(tf.string, [1], 'filenames')
     if reference_mel is not None:
       reference_mel = tf.placeholder(tf.float32, [1, None, hparams.num_mels], 'reference_mel')
     # Only used in teacher-forcing generating mode
@@ -24,9 +26,9 @@ class Synthesizer:
     else:
       mel_targets = None
 
-    with tf.variable_scope('model') as scope:
+    with tf.variable_scope('model',reuse=reuse) as scope:
       self.model = create_model(model_name, hparams)
-      self.model.initialize(inputs, input_lengths, mel_targets=mel_targets, reference_mel=reference_mel)
+      self.model.initialize(inputs, input_lengths, filenames, mel_targets=mel_targets, reference_mel=reference_mel)
       self.wav_output = audio.inv_spectrogram_tensorflow(self.model.linear_outputs[0])
       self.alignments = self.model.alignments[0]
 

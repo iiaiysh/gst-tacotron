@@ -15,7 +15,8 @@ from text import sequence_to_text
 from util import audio, infolog, plot, ValueWindow
 log = infolog.log
 
-
+from synthesizer import Synthesizer
+import re
 def get_git_commit():
   subprocess.check_output(['git', 'diff-index', '--quiet', 'HEAD'])   # Verify client is clean
   commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip()[:10]
@@ -31,7 +32,7 @@ def get_output_base_path(checkpoint_path):
 
 def run_eval(synthesizer,checkpoint,texts,ref_wav=None):
   # print(hparams_debug_string())
-  synthesizer.load(checkpoint,ref_wav)
+  synthesizer.load(checkpoint,ref_wav,reuse=True)
   base_path = get_output_base_path(checkpoint)
   for i, text in enumerate(texts):
     if ref_wav is None:
@@ -39,7 +40,7 @@ def run_eval(synthesizer,checkpoint,texts,ref_wav=None):
       reference_mel = None
     else:
       path = '%s_ref.wav' % (base_path)
-      ref_wav = audio.load_wav(args.reference_audio)
+      ref_wav = audio.load_wav(ref_wav)
       reference_mel = audio.melspectrogram(ref_wav).astype(np.float32).T
     print('   Synthesizing: %s' % path)
     with open(path, 'wb') as f:
@@ -97,7 +98,7 @@ def train(log_dir, args):
   saver = tf.train.Saver(max_to_keep=None)
 
   # Train!
-  synthesizer = Synthesizer(reuse=True)
+  synthesizer = Synthesizer()
 
   with tf.Session() as sess:
     try:
@@ -132,29 +133,34 @@ def train(log_dir, args):
           summary_writer.add_summary(sess.run(stats), step)
 
         if step % args.checkpoint_interval == 0:
-          log('Saving checkpoint to: %s-%d' % (checkpoint_path, step))
+          log('    Saving checkpoint to: %s-%d' % (checkpoint_path, step))
           saver.save(sess, checkpoint_path, global_step=step)
-          log('Saving audio and alignment...')
+          log('    Saving alignment...')
           input_seq, spectrogram, alignment, filename, spectrogram_target = sess.run([
             model.inputs[0], model.linear_outputs[0], model.alignments[0],model.filenames[0], model.linear_targets[0]])
+          
+          log('    Saving audio train...')
           waveform = audio.inv_spectrogram(spectrogram.T)
           audio.save_wav(waveform, os.path.join(log_dir, 'step-%d-audio-train.wav' % step))
           
+          log('    Saving audio target...')
           waveform_target = audio.inv_spectrogram(spectrogram_target.T)
           audio.save_wav(waveform_target, os.path.join(log_dir, 'step-%d-audio-target.wav' % step))
 
+          log('    Saving audio truth...')
           filename = str(filename)
           filename = filename[2:-1]
-          log('   Input file: %s' % filename)
+          #log('   Input file: %s' % filename)
           os.system(f'cp {filename} {log_dir}/step-{step}-audio-truth.wav')
 
-          log('   Input: %s' % sequence_to_text(input_seq))
+          log('    Eval Input: %s' % sequence_to_text(input_seq))
+          log('	   Saving audio eval...')
           run_eval(synthesizer, '%s-%d' % (checkpoint_path, step), texts = [sequence_to_text(input_seq)])
-          run_eval(synthesizer, '%s-%d' % (checkpoint_path, step), texts = [sequence_to_text(input_seq)],filename)
+          run_eval(synthesizer, '%s-%d' % (checkpoint_path, step), texts = [sequence_to_text(input_seq)],ref_wav=filename)
 
           plot.plot_alignment(alignment, os.path.join(log_dir, 'step-%d-align.png' % step),
             info='%s, %s, %s, step=%d, loss=%.5f' % (args.model, commit, time_string(), step, loss))
-          log('Input: %s' % sequence_to_text(input_seq))
+          #log('Input: %s' % sequence_to_text(input_seq))
 
     except Exception as e:
       log('Exiting due to exception: %s' % e, slack=True)
