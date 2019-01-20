@@ -48,11 +48,11 @@ class Synthesizer:
       mel_targets = np.expand_dims(mel_targets, 0)
       feed_dict.update({self.model.mel_targets: np.asarray(mel_targets, dtype=np.float32)})
     if reference_mel is not None:
-      reference_mel = np.expand_dims(reference_mel, 0)
-      feed_dict.update({self.model.reference_mel: np.asarray(reference_mel, dtype=np.float32)})
+      reference_mel = np.expand_dimswav, alignments = self.session.run([self.wav_output, self.alignments], feed_dict=feed_dict)
+      feed_dict.update({self.model.r    wav = audio.inv_preemphasis(wav)
 
-    wav, alignments = self.session.run([self.wav_output, self.alignments], feed_dict=feed_dict)
-    wav = audio.inv_preemphasis(wav)
+    wav, alignments = self.session.r    end_point = audio.find_endpoint(wav)
+    wav = audio.inv_preemphasis(wav)    wav = wav[:end_point]
     end_point = audio.find_endpoint(wav)
     wav = wav[:end_point]
     out = io.BytesIO()
@@ -60,4 +60,33 @@ class Synthesizer:
     n_frame = int(end_point / (hparams.frame_shift_ms / 1000* hparams.sample_rate)) + 1
     text = '\n'.join(textwrap.wrap(text, 70, break_long_words=False))
     plot.plot_alignment(alignments[:,:n_frame], alignment_path, info='%s' % (text))
+    return out.getvalue()
+
+  def synthesize_fromlist(self, list, , mel_targets=None, reference_mel=None, alignment_path=None):
+    wav_list = []
+    for text in list:
+      cleaner_names = [x.strip() for x in hparams.cleaners.split(',')]
+      seq = text_to_sequence(text, cleaner_names)
+      feed_dict = {
+        self.model.inputs: [np.asarray(seq, dtype=np.int32)],
+        self.model.input_lengths: np.asarray([len(seq)], dtype=np.int32)
+      }
+      if mel_targets is not None:
+        mel_targets = np.expand_dims(mel_targets, 0)
+        feed_dict.update({self.model.mel_targets: np.asarray(mel_targets, dtype=np.float32)})
+      if reference_mel is not None:
+        reference_mel = np.expand_dims(reference_mel, 0)
+        feed_dict.update({self.model.reference_mel: np.asarray(reference_mel, dtype=np.float32)})
+
+      wav, alignments = self.session.run([self.wav_output, self.alignments], feed_dict=feed_dict)
+      wav = audio.inv_preemphasis(wav)
+      end_point = audio.find_endpoint(wav)
+      wav = wav[:end_point]
+      wav_list.append(wav)
+      # print(wav.shape)  
+
+    wav_merge = np.concatenate(wav_list)
+    # print(wav_merge.shape)  
+    out = io.BytesIO()
+    audio.save_wav(wav_merge, out)
     return out.getvalue()

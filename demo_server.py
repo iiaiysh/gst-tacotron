@@ -60,6 +60,17 @@ function synthesize(text) {
 </script></body></html>
 '''
 
+split_mark=['']
+def text2list(text):
+    split_marks = '.!?'
+    text_list = re.split(f'([{split_marks}])',text)
+    text_list_without_standalone_mark = []
+    for i in range(0,len(text_list),2):
+        if i+1 < len(text_list):
+            text_list_without_standalone_mark.append(text_list[i] + text_list[i+1])
+        else:
+            text_list_without_standalone_mark.append(text_list[i])
+
 
 class UIResource:
   def on_get(self, req, res):
@@ -71,11 +82,14 @@ class SynthesisResource:
   def on_get(self, req, res):
     if not req.params.get('text'):
       raise falcon.HTTPBadRequest()
-    res.data = synthesizer.synthesize(req.params.get('text'),mel_targets=mel_targets, reference_mel=reference_mel)
+    text = req.params.get('text')
+    text_list = text2list(text)
+    print(text_list)
+    res.data = synthesizer.synthesize_fromlist(text_list,mel_targets=mel_targets, reference_mel=reference_mel)
     res.content_type = 'audio/wav'
 
 
-#synthesizer = Synthesizer()
+synthesizer = Synthesizer()
 api = falcon.API()
 api.add_route('/synthesize', SynthesisResource())
 api.add_route('/demo', UIResource())
@@ -101,23 +115,23 @@ if __name__ == '__main__':
   if args.mel_targets is not None:
     is_teacher_force = True
     mel_targets = np.load(args.mel_targets)
-  synthesizer = Synthesizer(teacher_forcing_generating=is_teacher_force)
-  synthesizer.load(args.checkpoint, args.reference_audio)
-  #base_path = get_output_base_path(args.checkpoint)
+  synth = Synthesizer(teacher_forcing_generating=is_teacher_force)
+  synth.load(args.checkpoint, args.reference_audio)
+  base_path = get_output_base_path(args.checkpoint)
 
   if args.reference_audio is not None:
     ref_wav = audio.load_wav(args.reference_audio)
     reference_mel = audio.melspectrogram(ref_wav).astype(np.float32).T
-    #path = '%s_ref-%s.wav' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
-    #alignment_path = '%s_ref-%s-align.png' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
+    path = '%s_ref-%s.wav' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
+    alignment_path = '%s_ref-%s-align.png' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
   else:
     if hparams.use_gst:
       print("*******************************")
       print("TODO: add style weights when there is no reference audio. Now we use random weights, " + 
              "which may generate unintelligible audio sometimes.")
       print("*******************************")
-      #path = '%s_ref-randomWeight.wav' % (base_path)
-      #alignment_path = '%s_ref-%s-align.png' % (base_path, 'randomWeight')
+      path = '%s_ref-randomWeight.wav' % (base_path)
+      alignment_path = '%s_ref-%s-align.png' % (base_path, 'randomWeight')
     else:
       raise ValueError("You must set the reference audio if you don't want to use GSTs.")
 
