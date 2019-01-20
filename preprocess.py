@@ -20,8 +20,8 @@ def preprocess_ljspeech(args):
   in_dir = os.path.join(args.base_dir, 'database/audiobook_manual')
   out_dir = os.path.join(args.base_dir, args.output)
   os.makedirs(out_dir, exist_ok=True)
-  metadata = ljspeech.build_from_path(in_dir, out_dir, args.num_workers, tqdm=tqdm)
-  write_metadata(metadata, out_dir)
+  metadata, csv_name_list = ljspeech.build_from_path(in_dir, out_dir, args.num_workers, tqdm=tqdm)
+  write_metadata(metadata, out_dir, csv_name_list)
 
 def preprocess_blizzard2013(args):
   in_dir = os.path.join(args.base_dir, 'database/blizzard2013/segmented')
@@ -30,10 +30,10 @@ def preprocess_blizzard2013(args):
   metadata = blizzard2013.build_from_path(in_dir, out_dir, args.num_workers, tqdm=tqdm)
   write_metadata(metadata, out_dir)
 
-def write_metadata(metadata, out_dir):
+def write_metadata(metadata, out_dir, csv_name_list):
   with open(os.path.join(out_dir, 'train.txt'), 'w', encoding='utf-8') as f:
     for m in metadata:
-      f.write('|'.join([str(x) for x in m]) + '\n')
+      f.write('|'.join([str(x) for x in m]) + '|' + csv_name_list[i]  + '\n')
   frames = sum([m[2] for m in metadata])
   hours = frames * hparams.frame_shift_ms / (3600 * 1000)
   print('Wrote %d utterances, %d frames (%.2f hours)' % (len(metadata), frames, hours))

@@ -15,7 +15,7 @@ class Tacotron():
     self._hparams = hparams
 
 
-  def initialize(self, inputs, input_lengths, mel_targets=None, linear_targets=None, reference_mel=None):
+  def initialize(self, inputs, input_lengths, filenames, mel_targets=None, linear_targets=None, reference_mel=None):
     '''Initializes the model for inference.
 
     Sets "mel_outputs", "linear_outputs", and "alignments" fields.
@@ -142,6 +142,9 @@ class Tacotron():
       self.mel_targets = mel_targets
       self.linear_targets = linear_targets
       self.reference_mel = reference_mel
+
+      self.filenames = filenames
+
       log('Initialized Tacotron model. Dimensions: ')
       log('  text embedding:          %d' % embedded_inputs.shape[-1])
       log('  style embedding:         %d' % style_embeddings.shape[-1])

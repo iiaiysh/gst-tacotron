@@ -38,7 +38,8 @@ class DataFeeder(threading.Thread):
       tf.placeholder(tf.int32, [None, None], 'inputs'),
       tf.placeholder(tf.int32, [None], 'input_lengths'),
       tf.placeholder(tf.float32, [None, None, hparams.num_mels], 'mel_targets'),
-      tf.placeholder(tf.float32, [None, None, hparams.num_freq], 'linear_targets')
+      tf.placeholder(tf.float32, [None, None, hparams.num_freq], 'linear_targets'),
+      tf.placeholder(tf.string, [None], 'filenames')
     ]
 
     # Create queue for buffering data:
@@ -49,6 +50,7 @@ class DataFeeder(threading.Thread):
     self.input_lengths.set_shape(self._placeholders[1].shape)
     self.mel_targets.set_shape(self._placeholders[2].shape)
     self.linear_targets.set_shape(self._placeholders[3].shape)
+    self.filenames.set_shape(self._placeholders[4].shape)
 
     # Load CMUDict: If enabled, this will randomly substitute some words in the training data with
     # their ARPABet equivalents, which will allow you to also pass ARPABet to the model for
@@ -113,7 +115,7 @@ class DataFeeder(threading.Thread):
     input_data = np.asarray(text_to_sequence(text, self._cleaner_names), dtype=np.int32)
     linear_target = np.load(os.path.join(self._datadir, meta[0]))
     mel_target = np.load(os.path.join(self._datadir, meta[1]))
-    return (input_data, mel_target, linear_target, len(linear_target))
+    return (input_data, mel_target, linear_target, len(linear_target),meta[-1])
 
 
   def _maybe_get_arpabet(self, word):

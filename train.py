@@ -23,6 +23,29 @@ def get_git_commit():
   return commit
 
 
+def get_output_base_path(checkpoint_path):
+  base_dir = os.path.dirname(checkpoint_path)
+  m = re.compile(r'.*?\.ckpt\-([0-9]+)').match(checkpoint_path)
+  name = 'step-%d-audio-eval' % int(m.group(1)) if m else 'eval'
+  return os.path.join(base_dir, name)
+
+def run_eval(synthesizer,checkpoint,texts,ref_wav=None):
+  # print(hparams_debug_string())
+  synthesizer.load(checkpoint,ref_wav)
+  base_path = get_output_base_path(checkpoint)
+  for i, text in enumerate(texts):
+    if ref_wav is None:
+      path = '%s_noref.wav' % (base_path)
+      reference_mel = None
+    else:
+      path = '%s_ref.wav' % (base_path)
+      ref_wav = audio.load_wav(args.reference_audio)
+      reference_mel = audio.melspectrogram(ref_wav).astype(np.float32).T
+    print('   Synthesizing: %s' % path)
+    with open(path, 'wb') as f:
+      f.write(synthesizer.synthesize(text,reference_mel=reference_mel))
+  #del synthesizer
+
 def add_stats(model):
   with tf.variable_scope('stats') as scope:
     tf.summary.histogram('linear_outputs', model.linear_outputs)
@@ -61,7 +84,7 @@ def train(log_dir, args):
   global_step = tf.Variable(0, name='global_step', trainable=False)
   with tf.variable_scope('model') as scope:
     model = create_model(args.model, hparams)
-    model.initialize(feeder.inputs, feeder.input_lengths, feeder.mel_targets, feeder.linear_targets)
+    model.initialize(feeder.inputs, feeder.input_lengths, feeder.filenames, feeder.mel_targets, feeder.linear_targets)
     model.add_loss()
     model.add_optimizer(global_step)
     stats = add_stats(model)
@@ -74,6 +97,8 @@ def train(log_dir, args):
   saver = tf.train.Saver(max_to_keep=None)
 
   # Train!
+  synthesizer = Synthesizer(reuse=True)
+
   with tf.Session() as sess:
     try:
       summary_writer = tf.summary.FileWriter(log_dir, sess.graph)
@@ -110,10 +135,23 @@ def train(log_dir, args):
           log('Saving checkpoint to: %s-%d' % (checkpoint_path, step))
           saver.save(sess, checkpoint_path, global_step=step)
           log('Saving audio and alignment...')
-          input_seq, spectrogram, alignment = sess.run([
-            model.inputs[0], model.linear_outputs[0], model.alignments[0]])
+          input_seq, spectrogram, alignment, filename, spectrogram_target = sess.run([
+            model.inputs[0], model.linear_outputs[0], model.alignments[0],model.filenames[0], model.linear_targets[0]])
           waveform = audio.inv_spectrogram(spectrogram.T)
-          audio.save_wav(waveform, os.path.join(log_dir, 'step-%d-audio.wav' % step))
+          audio.save_wav(waveform, os.path.join(log_dir, 'step-%d-audio-train.wav' % step))
+          
+          waveform_target = audio.inv_spectrogram(spectrogram_target.T)
+          audio.save_wav(waveform_target, os.path.join(log_dir, 'step-%d-audio-target.wav' % step))
+
+          filename = str(filename)
+          filename = filename[2:-1]
+          log('   Input file: %s' % filename)
+          os.system(f'cp {filename} {log_dir}/step-{step}-audio-truth.wav')
+
+          log('   Input: %s' % sequence_to_text(input_seq))
+          run_eval(synthesizer, '%s-%d' % (checkpoint_path, step), texts = [sequence_to_text(input_seq)])
+          run_eval(synthesizer, '%s-%d' % (checkpoint_path, step), texts = [sequence_to_text(input_seq)],filename)
+
           plot.plot_alignment(alignment, os.path.join(log_dir, 'step-%d-align.png' % step),
             info='%s, %s, %s, step=%d, loss=%.5f' % (args.model, commit, time_string(), step, loss))
           log('Input: %s' % sequence_to_text(input_seq))
