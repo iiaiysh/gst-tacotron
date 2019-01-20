@@ -25,12 +25,15 @@ button[disabled] {opacity: 0.4; cursor: default}
 <form>
   <input id="text" type="text" size="160" placeholder="Enter Text">
   <button id="button" name="synthesize">Speak</button>
+  <button id="button2" name="synthesize_fromlist">SpeakFromList</button>
 </form>
 <p id="message"></p>
 <audio id="audio" controls autoplay hidden></audio>
 <script>
+
 function q(selector) {return document.querySelector(selector)}
 q('#text').focus()
+
 q('#button').addEventListener('click', function(e) {
   text = q('#text').value.trim()
   if (text) {
@@ -42,6 +45,36 @@ q('#button').addEventListener('click', function(e) {
   e.preventDefault()
   return false
 })
+
+q('#button2').addEventListener('click', function(e) {
+  text = q('#text').value.trim()
+  if (text) {
+    q('#message').textContent = 'Synthesizing...'
+    q('#button2').disabled = true
+    q('#audio').hidden = true
+    synthesize_fromlist(text)
+  }
+  e.preventDefault()
+  return false
+})
+
+function synthesize_fromlist(text) {
+  fetch('/synthesize_fromlist?text=' + encodeURIComponent(text), {cache: 'no-cache'})
+    .then(function(res) {
+      if (!res.ok) throw Error(res.statusText)
+      return res.blob()
+    }).then(function(blob) {
+      q('#message').textContent = ''
+      q('#button2').disabled = false
+      q('#audio').src = URL.createObjectURL(blob)
+      q('#audio').hidden = false
+    }).catch(function(err) {
+      q('#message').textContent = 'Error: ' + err.message
+      q('#button2').disabled = false
+    })
+}
+
+
 function synthesize(text) {
   fetch('/synthesize?text=' + encodeURIComponent(text), {cache: 'no-cache'})
     .then(function(res) {
@@ -77,6 +110,15 @@ class UIResource:
     res.content_type = 'text/html'
     res.body = html_body
 
+class SynthesisResourceFromList:
+  def on_get(self, req, res):
+    if not req.params.get('text'):
+      raise falcon.HTTPBadRequest()
+    text = req.params.get('text')
+    print(text)
+    res.data = synthesizer.synthesize(text,mel_targets=mel_targets, reference_mel=reference_mel)
+    res.content_type = 'audio/wav'
+
 
 class SynthesisResource:
   def on_get(self, req, res):
@@ -91,6 +133,7 @@ class SynthesisResource:
 
 api = falcon.API()
 api.add_route('/synthesize', SynthesisResource())
+api.add_route('/synthesize_fromlist', SynthesisResourceFromList())
 api.add_route('/demo', UIResource())
 
 
