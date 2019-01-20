@@ -70,7 +70,7 @@ def text2list(text):
             text_list_without_standalone_mark.append(text_list[i] + text_list[i+1])
         else:
             text_list_without_standalone_mark.append(text_list[i])
-
+    return text_list_without_standalone_mark[:-1]
 
 class UIResource:
   def on_get(self, req, res):
@@ -89,7 +89,6 @@ class SynthesisResource:
     res.content_type = 'audio/wav'
 
 
-synthesizer = Synthesizer()
 api = falcon.API()
 api.add_route('/synthesize', SynthesisResource())
 api.add_route('/demo', UIResource())
@@ -115,23 +114,23 @@ if __name__ == '__main__':
   if args.mel_targets is not None:
     is_teacher_force = True
     mel_targets = np.load(args.mel_targets)
-  synth = Synthesizer(teacher_forcing_generating=is_teacher_force)
-  synth.load(args.checkpoint, args.reference_audio)
-  base_path = get_output_base_path(args.checkpoint)
+  synthesizer = Synthesizer(teacher_forcing_generating=is_teacher_force)
+  synthesizer.load(args.checkpoint, args.reference_audio)
+  #base_path = get_output_base_path(args.checkpoint)
 
   if args.reference_audio is not None:
     ref_wav = audio.load_wav(args.reference_audio)
     reference_mel = audio.melspectrogram(ref_wav).astype(np.float32).T
-    path = '%s_ref-%s.wav' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
-    alignment_path = '%s_ref-%s-align.png' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
+    #path = '%s_ref-%s.wav' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
+    #alignment_path = '%s_ref-%s-align.png' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
   else:
     if hparams.use_gst:
       print("*******************************")
       print("TODO: add style weights when there is no reference audio. Now we use random weights, " + 
              "which may generate unintelligible audio sometimes.")
       print("*******************************")
-      path = '%s_ref-randomWeight.wav' % (base_path)
-      alignment_path = '%s_ref-%s-align.png' % (base_path, 'randomWeight')
+      #path = '%s_ref-randomWeight.wav' % (base_path)
+      #alignment_path = '%s_ref-%s-align.png' % (base_path, 'randomWeight')
     else:
       raise ValueError("You must set the reference audio if you don't want to use GSTs.")
 
