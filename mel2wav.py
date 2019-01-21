@@ -3,8 +3,8 @@ from util import audio
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--mel',requried=True)
-parser.add_argument('--wav',requried=True)
+parser.add_argument('--mel',required=True)
+parser.add_argument('--wav',required=True)
 args = parser.parse_args()
 
 

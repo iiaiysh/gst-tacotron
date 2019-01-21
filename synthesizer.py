@@ -59,9 +59,9 @@ class Synthesizer:
     wav = wav[:end_point]
     out = io.BytesIO()
     audio.save_wav(wav, out)
-    n_frame = int(end_point / (hparams.frame_shift_ms / 1000* hparams.sample_rate)) + 1
-    text = '\n'.join(textwrap.wrap(text, 70, break_long_words=False))
-    plot.plot_alignment(alignments[:,:n_frame], alignment_path, info='%s' % (text))
+    #n_frame = int(end_point / (hparams.frame_shift_ms / 1000* hparams.sample_rate)) + 1
+    #text = '\n'.join(textwrap.wrap(text, 70, break_long_words=False))
+    #plot.plot_alignment(alignments[:,:n_frame], alignment_path, info='%s' % (text))
     return out.getvalue()
 
   def synthesize_fromlist(self, text_list, mel_targets=None, reference_mel=None, alignment_path=None):
