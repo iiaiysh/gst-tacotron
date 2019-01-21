@@ -4,27 +4,34 @@ import tensorflow as tf
 from hparams import hparams
 from librosa import effects
 from models import create_model
-from text import text_to_sequence
+from text import text_to_sequence, text2list
 from util import audio, plot
 import textwrap
 
 
 class Synthesizer:
-  def __init__(self, teacher_forcing_generating=False):
-    self.teacher_forcing_generating = teacher_forcing_generating
+  def __init__(self, mel_targets=None, reference_mel=None, model_name='tacotron',reuse=None):
 
-  def load(self, checkpoint_path, reference_mel=None, model_name='tacotron',reuse=None):
-    print('Constructing model: %s' % model_name)
+    print('synthesizer init')
     inputs = tf.placeholder(tf.int32, [1, None], 'inputs')
-    input_lengths = tf.placeholder(tf.int32, [1], 'input_lengths') 
+    input_lengths = tf.placeholder(tf.int32, [1], 'input_lengths')
     filenames = tf.placeholder(tf.string, [1], 'filenames')
+    
+    if mel_targets is not None:
+      mel_targets = np.load(mel_targets)
+
+    if reference_mel is not None:
+      ref_wav = audio.load_wav(reference_mel)
+      reference_mel = audio.melspectrogram(ref_wav).astype(np.float32).T
+
+    self.reference_mel = reference_mel
+    self.mel_targets = mel_targets
+
     if reference_mel is not None:
       reference_mel = tf.placeholder(tf.float32, [1, None, hparams.num_mels], 'reference_mel')
     # Only used in teacher-forcing generating mode
-    if self.teacher_forcing_generating:
+    if mel_targets is not None:
       mel_targets = tf.placeholder(tf.float32, [1, None, hparams.num_mels], 'mel_targets')
-    else:
-      mel_targets = None
 
     with tf.variable_scope('model',reuse=reuse) as scope:
       self.model = create_model(model_name, hparams)
@@ -32,6 +39,9 @@ class Synthesizer:
       self.wav_output = audio.inv_spectrogram_tensorflow(self.model.linear_outputs[0])
       self.alignments = self.model.alignments[0]
 
+  
+  def load(self, checkpoint_path):
+   
     print('Loading checkpoint: %s' % checkpoint_path)
     self.session = tf.Session()
     self.session.run(tf.global_variables_initializer())
@@ -39,18 +49,19 @@ class Synthesizer:
     saver.restore(self.session, checkpoint_path)
 
 
-  def synthesize(self, text, mel_targets=None, reference_mel=None, alignment_path=None):
+  def synthesize(self, input_text):
+    print('systhesize...',input_text)
     cleaner_names = [x.strip() for x in hparams.cleaners.split(',')]
-    seq = text_to_sequence(text, cleaner_names)
+    seq = text_to_sequence(input_text, cleaner_names)
     feed_dict = {
       self.model.inputs: [np.asarray(seq, dtype=np.int32)],
       self.model.input_lengths: np.asarray([len(seq)], dtype=np.int32),
     }
-    if mel_targets is not None:
-      mel_targets = np.expand_dims(mel_targets, 0)
+    if self.mel_targets is not None:
+      mel_targets = np.expand_dims(self.mel_targets, 0)
       feed_dict.update({self.model.mel_targets: np.asarray(mel_targets, dtype=np.float32)})
-    if reference_mel is not None:
-      reference_mel = np.expand_dims(reference_mel, 0)
+    if self.reference_mel is not None:
+      reference_mel = np.expand_dims(self.reference_mel, 0)
       feed_dict.update({self.model.reference_mel: np.asarray(reference_mel, dtype=np.float32)})
 
     wav, alignments = self.session.run([self.wav_output, self.alignments], feed_dict=feed_dict)
@@ -64,26 +75,22 @@ class Synthesizer:
     #plot.plot_alignment(alignments[:,:n_frame], alignment_path, info='%s' % (text))
     return out.getvalue()
 
-  def synthesize_fromlist(self, text_list, mel_targets=None, reference_mel=None, alignment_path=None):
-
-    if mel_targets is not None:
-      mel_targets = np.expand_dims(mel_targets, 0)
-    if reference_mel is not None:
-      reference_mel = np.expand_dims(reference_mel, 0)
-
-
-
+  def synthesize_fromlist(self, input_text):
+    print('synthesize from list ...',input_text)
+    text_list = text2list(input_text)
     wav_list = []
-    for text in text_list:
+    for item in text_list:
       cleaner_names = [x.strip() for x in hparams.cleaners.split(',')]
-      seq = text_to_sequence(text, cleaner_names)
+      seq = text_to_sequence(item, cleaner_names)
       feed_dict = {
         self.model.inputs: [np.asarray(seq, dtype=np.int32)],
         self.model.input_lengths: np.asarray([len(seq)], dtype=np.int32)
       }
-      if mel_targets is not None:
+      if self.mel_targets is not None:
+        mel_targets = np.expand_dims(self.mel_targets, 0)
         feed_dict.update({self.model.mel_targets: np.asarray(mel_targets, dtype=np.float32)})
-      if reference_mel is not None:
+      if self.reference_mel is not None:
+        reference_mel = np.expand_dims(self.reference_mel, 0)
         feed_dict.update({self.model.reference_mel: np.asarray(reference_mel, dtype=np.float32)})
 
       wav, alignments = self.session.run([self.wav_output, self.alignments], feed_dict=feed_dict)

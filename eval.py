@@ -15,37 +15,26 @@ def get_output_base_path(checkpoint_path):
 
 def run_eval(args):
   print(hparams_debug_string())
-  is_teacher_force = False
-  mel_targets = args.mel_targets
-  reference_mel = None
   if args.mel_targets is not None:
-    is_teacher_force = True
     mel_targets = np.load(args.mel_targets)
-  synth = Synthesizer(teacher_forcing_generating=is_teacher_force)
-  synth.load(args.checkpoint, args.reference_audio)
-  base_path = get_output_base_path(args.checkpoint)
+  else:
+    mel_targets = None
 
   if args.reference_audio is not None:
     ref_wav = audio.load_wav(args.reference_audio)
     reference_mel = audio.melspectrogram(ref_wav).astype(np.float32).T
-    path = '%s_ref-%s.wav' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
-    alignment_path = '%s_ref-%s-align.png' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
   else:
-    if hparams.use_gst:
-      print("*******************************")
-      print("TODO: add style weights when there is no reference audio. Now we use random weights, " + 
-             "which may generate unintelligible audio sometimes.")
-      print("*******************************")
-      path = '%s_ref-randomWeight.wav' % (base_path)
-      alignment_path = '%s_ref-%s-align.png' % (base_path, 'randomWeight')
-    else:
-      raise ValueError("You must set the reference audio if you don't want to use GSTs.")
+    reference_mel = None
+  
+  synth = Synthesizer(mel_targets=mel_targets, reference_mel=reference_mel, reuse=reuse)
+  synth.load(args.checkpoint)
+  base_path = get_output_base_path(args.checkpoint)
+
 
   with open(path, 'wb') as f:
     print('Synthesizing: %s' % args.text)
     print('Output wav file: %s' % path)
-    print('Output alignments: %s' % alignment_path)
-    f.write(synth.synthesize(args.text, mel_targets=mel_targets, reference_mel=reference_mel, alignment_path=alignment_path))
+    f.write(synth.synthesize(args.text)
 
 
 def main():

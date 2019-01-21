@@ -7,8 +7,8 @@ from synthesizer import Synthesizer
 
 import re
 import numpy as np
-from util import audio
-
+from util import audio, text
+import tensorflow as tf
 html_body = '''<html><title>Demo</title>
 <style>
 body {padding: 16px; font-family: sans-serif; font-size: 14px; color: #444}
@@ -93,17 +93,6 @@ function synthesize(text) {
 </script></body></html>
 '''
 
-split_mark=['']
-def text2list(text):
-    split_marks = '.!?'
-    text_list = re.split(f'([{split_marks}])',text)
-    text_list_without_standalone_mark = []
-    for i in range(0,len(text_list),2):
-        if i+1 < len(text_list):
-            text_list_without_standalone_mark.append(text_list[i] + text_list[i+1])
-        else:
-            text_list_without_standalone_mark.append(text_list[i])
-    return text_list_without_standalone_mark[:-1]
 
 class UIResource:
   def on_get(self, req, res):
@@ -115,8 +104,7 @@ class SynthesisResourceFromList:
     if not req.params.get('text'):
       raise falcon.HTTPBadRequest()
     text = req.params.get('text')
-    print(text)
-    res.data = synthesizer.synthesize(text,mel_targets=mel_targets, reference_mel=reference_mel)
+    res.data = synthesizer.synthesize_fromlist(text)
     res.content_type = 'audio/wav'
 
 
@@ -125,9 +113,7 @@ class SynthesisResource:
     if not req.params.get('text'):
       raise falcon.HTTPBadRequest()
     text = req.params.get('text')
-    text_list = text2list(text)
-    print(text_list)
-    res.data = synthesizer.synthesize_fromlist(text_list,mel_targets=mel_targets, reference_mel=reference_mel)
+    res.data = synthesizer.synthesize(text)
     res.content_type = 'audio/wav'
 
 
@@ -151,37 +137,9 @@ if __name__ == '__main__':
   hparams.parse(args.hparams)
   print(hparams_debug_string())
 
-  is_teacher_force = False
-  mel_targets = args.mel_targets
-  reference_mel = None
-  if args.mel_targets is not None:
-    is_teacher_force = True
-    mel_targets = np.load(args.mel_targets)
-  synthesizer = Synthesizer(teacher_forcing_generating=is_teacher_force)
-  synthesizer.load(args.checkpoint, args.reference_audio)
+  synthesizer = Synthesizer(mel_targets=args.mel_targets, reference_mel=args.reference_audio,reuse=tf.AUTO_REUSE)
+  synthesizer.load(args.checkpoint)
   #base_path = get_output_base_path(args.checkpoint)
-
-  if args.reference_audio is not None:
-    ref_wav = audio.load_wav(args.reference_audio)
-    reference_mel = audio.melspectrogram(ref_wav).astype(np.float32).T
-    #path = '%s_ref-%s.wav' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
-    #alignment_path = '%s_ref-%s-align.png' % (base_path, os.path.splitext(os.path.basename(args.reference_audio))[0])
-  else:
-    if hparams.use_gst:
-      print("*******************************")
-      print("TODO: add style weights when there is no reference audio. Now we use random weights, " + 
-             "which may generate unintelligible audio sometimes.")
-      print("*******************************")
-      #path = '%s_ref-randomWeight.wav' % (base_path)
-      #alignment_path = '%s_ref-%s-align.png' % (base_path, 'randomWeight')
-    else:
-      raise ValueError("You must set the reference audio if you don't want to use GSTs.")
-
-#   with open(path, 'wb') as f:
-#     print('Synthesizing: %s' % args.text)
-#     print('Output wav file: %s' % path)
-#     print('Output alignments: %s' % alignment_path)
-#     f.write(synth.synthesize(args.text, mel_targets=mel_targets, reference_mel=reference_mel, alignment_path=alignment_path))
 
   print('Serving on port %d' % args.port)
   simple_server.make_server('0.0.0.0', args.port, api).serve_forever()
